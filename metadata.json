@@ -1,0 +1,6 @@
+{
+  "name": "MicroFin",
+  "description": "Plateforme numérique d'inclusion financière et de micro-crédit pour les petits exploitants maraîchers et arboriculteurs au Sénégal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
