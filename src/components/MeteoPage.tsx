@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
+import AiSowingCompanion from './AiSowingCompanion';
 
 // Meteorological dataset for Senegalese agricultural regions
 interface DepMeteoData {
@@ -2061,7 +2062,10 @@ export default function MeteoPage({ currentUser, onUpdateUser, setCurrentPage }:
 
       </div>
 
-      {/* 4. REAL-TIME BLOCKCHAIN/MOBILE PAYOUT LOGS FOR CNAAS TRUTH SENSORS */}
+      {/* 4. 🤖 COMPAGNON IA CONSEILS METEO DE SEMIS */}
+      <AiSowingCompanion currentUser={currentUser} />
+
+      {/* 5. REAL-TIME BLOCKCHAIN/MOBILE PAYOUT LOGS FOR CNAAS TRUTH SENSORS */}
       <div className="bg-white rounded-3xl border border-slate-150 p-6 shadow-sm space-y-6">
         <div>
           <div className="flex items-center gap-2 text-slate-800">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Phone, Wifi, Battery, Send, RefreshCw, Milestone, MessageSquare, CheckCircle2, AlertTriangle, Play, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OFFRES_DATA } from '../data';
+import { addSimulatedSms } from '../utils/smsHelper';
 
 export default function UssdSimulator() {
   const [ussdInput, setUssdInput] = useState('');
@@ -301,6 +302,14 @@ export default function UssdSimulator() {
         body,
         time: 'À l’instant'
       });
+      
+      // Register in our central simulated SMS center!
+      const mappedSender: 'ANACIM' | 'CNAAS' | 'MicroFin' | 'Tontine-Sen' = 
+        sender.toLowerCase().includes('cnaas') ? 'CNAAS' : 
+        sender.toLowerCase().includes('tontine') ? 'Tontine-Sen' : 'MicroFin';
+        
+      addSimulatedSms(mappedSender, body);
+
       // Simple beep sound effect using web audio context (harmless, lovely UX if browser allows)
       try {
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();

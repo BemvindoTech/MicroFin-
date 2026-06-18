@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { STATS, FAQS } from '../data';
 import UssdSimulator from './UssdSimulator';
+import SmsNotificationCenter from './SmsNotificationCenter';
 import { Play, ShieldCheck, Milestone, CheckCircle, ArrowRight, Sparkles, Smartphone, Landmark, HeartHandshake } from 'lucide-react';
 
 import { User } from '../types';
@@ -181,7 +182,13 @@ export default function HomePage({ setCurrentPage, currentUser, onTriggerLogin }
             </p>
           </div>
 
-          <UssdSimulator />
+          <div className="space-y-12">
+            <UssdSimulator />
+            
+            <div className="max-w-4xl mx-auto">
+              <SmsNotificationCenter currentUser={currentUser} />
+            </div>
+          </div>
         </div>
       </section>
 

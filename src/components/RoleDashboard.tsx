@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AudioGuidePlayer from './AudioGuidePlayer';
+import { addSimulatedSms } from '../utils/smsHelper';
+import SmsNotificationCenter from './SmsNotificationCenter';
 
 interface RoleDashboardProps {
   user: User;
@@ -81,9 +83,12 @@ export default function RoleDashboard({ user, onUpdateUser, setCurrentPage }: Ro
     });
     localStorage.setItem('microfin_activity_logs', JSON.stringify(logList));
 
+    // Send centralized simulated SMS receipt
+    addSimulatedSms('MicroFin', `MicroFin Reçu : Cotisation Tontine de ${amount.toLocaleString()} FCFA effectuée en direct. Votre épargne totale passe à ${(previousEpargne + amount).toLocaleString()} FCFA. Cote de solvabilité mise à jour.`);
+
     setTimeout(() => {
       setSuccessActionMsg(null);
-    }, 4000);
+    }, 4500);
   };
 
   // Producteur: Make Micro-credit request
@@ -113,6 +118,10 @@ export default function RoleDashboard({ user, onUpdateUser, setCurrentPage }: Ro
     saveSolicitations(currentList);
 
     setSuccessActionMsg(`Votre demande de crédit solidaire pour un montant de ${demandeMontant.toLocaleString()} FCFA a été soumise au GIE et à l'Unité de Contrôle pour validation.`);
+
+    // Send simulated SMS receipt
+    addSimulatedSms('MicroFin', `MicroFin Prêt : Demande de crédit de ${demandeMontant.toLocaleString()} FCFA pour l'achat de semences/intrants soumise avec succès. Votre GIE va être sollicité pour valider la caution solidaire.`);
+
     setTimeout(() => {
       setSuccessActionMsg(null);
     }, 4500);
@@ -139,6 +148,14 @@ export default function RoleDashboard({ user, onUpdateUser, setCurrentPage }: Ro
       text: `Décision de crédit: ${newStatus === 'APPROUVE' ? 'Approbation' : 'Rejet'} de ${reqItem ? reqItem.montant.toLocaleString() : ''} FCFA pour ${reqItem ? reqItem.userNom : 'Producteur'}`
     });
     localStorage.setItem('microfin_activity_logs', JSON.stringify(logList));
+
+    if (reqItem) {
+      if (newStatus === 'APPROUVE') {
+        addSimulatedSms('MicroFin', `MicroFin Crédit : Félicitations ! Votre demande de financement de ${reqItem.montant.toLocaleString()} FCFA pour le groupement (${reqItem.userGie}) a été validée par l'Unité de Contrôle. Les fonds ont été débloqués sur votre mobile !`);
+      } else {
+        addSimulatedSms('MicroFin', `MicroFin Info : Votre demande de crédit de ${reqItem.montant.toLocaleString()} FCFA a été rejetée par l'Unité de Contrôle en raison d'un manque de cautionnement mutuel collectif.`);
+      }
+    }
 
     setSuccessActionMsg(`Statut mis à jour avec succès : la demande est désormais ${newStatus === 'APPROUVE' ? 'approuvée' : 'rejetée'}.`);
     
@@ -757,6 +774,11 @@ export default function RoleDashboard({ user, onUpdateUser, setCurrentPage }: Ro
             </div>
           )}
 
+        </div>
+
+        {/* SMS NOTIFICATION PALETTE INTEGRATION */}
+        <div className="mt-10">
+          <SmsNotificationCenter currentUser={user} />
         </div>
 
       </div>
