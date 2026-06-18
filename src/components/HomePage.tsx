@@ -3,11 +3,15 @@ import { STATS, FAQS } from '../data';
 import UssdSimulator from './UssdSimulator';
 import { Play, ShieldCheck, Milestone, CheckCircle, ArrowRight, Sparkles, Smartphone, Landmark, HeartHandshake } from 'lucide-react';
 
+import { User } from '../types';
+
 interface HomePageProps {
-  setCurrentPage: (page: 'accueil' | 'offres' | 'contact') => void;
+  setCurrentPage: (page: 'accueil' | 'offres' | 'contact' | 'terrain' | 'dashboard') => void;
+  currentUser?: User | null;
+  onTriggerLogin?: () => void;
 }
 
-export default function HomePage({ setCurrentPage }: HomePageProps) {
+export default function HomePage({ setCurrentPage, currentUser, onTriggerLogin }: HomePageProps) {
   const simulatorRef = useRef<HTMLDivElement>(null);
 
   const scrollToSimulator = () => {
@@ -45,25 +49,39 @@ export default function HomePage({ setCurrentPage }: HomePageProps) {
             La première plateforme sénégalaise qui permet aux maraîchers et arboriculteurs d'épargner par tontine numérique et de débloquer des micro-crédits agricoles par simple code SMS/USSD, sans titre foncier.
           </p>
 
-          {/* CTA Buttons */}
+          {/* Dynamic CTAs based on login status */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-4">
+            {currentUser ? (
+              <button
+                onClick={() => {
+                  if (currentUser.role === 'AGENT') {
+                    setCurrentPage('terrain');
+                  } else {
+                    setCurrentPage('dashboard');
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-emerald-705 text-white font-semibold rounded-2xl shadow-lg shadow-primary/25 hover:shadow-primary/35 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <span>Accéder à Mon Espace ({currentUser.role === 'PRODUCTEUR' ? '🌾' : currentUser.role === 'AGENT' ? '📋' : '🏛️'})</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            ) : (
+              <button
+                onClick={onTriggerLogin}
+                className="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-emerald-705 text-white font-semibold rounded-2xl shadow-lg shadow-primary/25 hover:shadow-primary/35 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <span>Commencer / S'inscrire 🎉</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            )}
+
             <button
               onClick={scrollToSimulator}
-              className="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-primary-hover text-white font-semibold rounded-2xl shadow-lg shadow-primary/25 hover:shadow-primary/35 transition-all flex items-center justify-center gap-2 group cursor-pointer"
-            >
-              <Smartphone className="w-5 h-5 text-accent" />
-              <span>Découvrir le simulateur</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button
-              onClick={() => {
-                setCurrentPage('offres');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
               className="w-full sm:w-auto px-8 py-4 bg-white border-2 border-slate-200 text-slate-800 hover:text-primary hover:border-primary font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
-              <span>Voir les offres</span>
-              <span className="text-accent">★</span>
+              <Smartphone className="w-5 h-5 text-accent" />
+              <span>Simulateur USSD</span>
             </button>
           </div>
 

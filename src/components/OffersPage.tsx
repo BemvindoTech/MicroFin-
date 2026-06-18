@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OFFRES_DATA } from '../data';
-import { Offre } from '../types';
-import { Filter, Search, ShieldAlert, Sparkles, Smartphone, Check, HelpCircle, ArrowRight, X, PhoneCall, Wallet, Bot, Send, Loader2 } from 'lucide-react';
+import { Offre, User } from '../types';
+import { 
+  Filter, Search, ShieldAlert, Sparkles, Smartphone, Check, HelpCircle, 
+  ArrowRight, X, PhoneCall, Wallet, Bot, Send, Loader2, Play, Pause, 
+  Volume2, VolumeX, Activity, Languages, Mic, MicOff, Globe, CreditCard
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function OffersPage() {
+interface OffersPageProps {
+  currentUser?: User | null;
+  onUpdateUser?: (updatedUser: User) => void;
+  onTriggerLogin?: () => void;
+}
+
+export default function OffersPage({ currentUser, onUpdateUser, onTriggerLogin }: OffersPageProps) {
   const [selectedFilter, setSelectedFilter] = useState<'Tous' | 'Crédit' | 'Assurance' | 'Tontine'>('Tous');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOffre, setSelectedOffre] = useState<Offre | null>(null);
@@ -12,11 +22,195 @@ export default function OffersPage() {
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
+  // New states for Platform direct subscription
+  const [activeSubTab, setActiveSubTab] = useState<'plateforme' | 'ussd'>('plateforme');
+  const [paymentMode, setPaymentMode] = useState<'wave' | 'orange_money' | 'solde'>('wave');
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [directSubSuccess, setDirectSubSuccess] = useState(false);
+  const [directSubLoading, setDirectSubLoading] = useState(false);
+
   // States for AI Agent Assistance
   const [aiQuery, setAiQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResponse, setAiResponse] = useState<any>(null);
+
+  // Dictation states for AI Agent
+  const [isRecordingAgent, setIsRecordingAgent] = useState(false);
+  const [isSimulatingAgent, setIsSimulatingAgent] = useState(false);
+  const [simulationCountdownAgent, setSimulationCountdownAgent] = useState(3);
+
+  // Countdown timer for vocal simulation fallback in OffersPage
+  useEffect(() => {
+    let intervalId: any;
+    if (isRecordingAgent && isSimulatingAgent) {
+      setSimulationCountdownAgent(3);
+      intervalId = setInterval(() => {
+        setSimulationCountdownAgent((prev) => {
+          if (prev <= 1) {
+            clearInterval(intervalId);
+            completeAgentVocalSimulation();
+            return 3;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isRecordingAgent, isSimulatingAgent]);
+
+  const completeAgentVocalSimulation = () => {
+    setIsRecordingAgent(false);
+    setIsSimulatingAgent(false);
+    const agentQuestions = [
+      "Quels sont les détails du micro-crédit Semences Niayes et est-il disponible ?",
+      "Combien coûte la souscription pour la Tontine Féminine Teranga de Kaolack ?",
+      "Quelle est la zone couverte par l'Assurance Climat CNAAS et que garantit-elle ?",
+      "Quelles sont les conditions d'accès pour le Crédit Intrants Maraîchers ?"
+    ];
+    // Pick a random question
+    const randomIdx = Math.floor(Math.random() * agentQuestions.length);
+    setAiQuery(agentQuestions[randomIdx]);
+  };
+
+  const startAgentVoiceDictation = () => {
+    stopOfferAudioSpeech();
+    
+    // Check if browser supports SpeechRecognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      setIsRecordingAgent(true);
+      setIsSimulatingAgent(false);
+      
+      try {
+        const rec = new SpeechRecognition();
+        rec.lang = 'fr-FR';
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+
+        rec.onresult = (event: any) => {
+          const dictationText = event.results[0][0].transcript;
+          if (dictationText) {
+            setAiQuery(dictationText);
+          }
+        };
+
+        rec.onerror = (e: any) => {
+          console.warn("L'API Audio a échoué (souvent bloqué par l'iframe/sandbox), lancement du simulateur local :", e?.error);
+          triggerSimulatedAgentDictation();
+        };
+
+        rec.onend = () => {
+          setIsRecordingAgent(false);
+        };
+
+        rec.start();
+      } catch (error) {
+        triggerSimulatedAgentDictation();
+      }
+    } else {
+      triggerSimulatedAgentDictation();
+    }
+  };
+
+  const triggerSimulatedAgentDictation = () => {
+    setIsRecordingAgent(true);
+    setIsSimulatingAgent(true);
+    setSimulationCountdownAgent(3);
+  };
+
+  // Multilingual audio player states for Offer Details
+  const [isPlayingOfferAudio, setIsPlayingOfferAudio] = useState(false);
+  const [activeOfferLang, setActiveOfferLang] = useState<'fr' | 'wo' | 'sr' | 'pu' | null>(null);
+  const [displayedOfferPhonetic, setDisplayedOfferPhonetic] = useState<string | null>(null);
+
+  // Clean speech synthesis on unmount or on close modal
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const translateAndPlayOfferSpeech = (offre: Offre, lang: 'fr' | 'wo' | 'sr' | 'pu') => {
+    if (!('speechSynthesis' in window)) {
+      alert("La synthèse vocale n'est pas supportée dans votre navigateur.");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setActiveOfferLang(lang);
+    setIsPlayingOfferAudio(true);
+
+    if (lang === 'fr') {
+      const description = `Offre de ${offre.categorie} : ${offre.titre} pour la zone de ${offre.zone}. ${offre.description}. Statut : ${offre.statut}. Prix de souscription : ${offre.prixText}.`;
+      setDisplayedOfferPhonetic("Lecture audio en Français...");
+      
+      const utterance = new SpeechSynthesisUtterance(description);
+      utterance.lang = 'fr-FR';
+      utterance.rate = 0.9;
+      utterance.onend = () => {
+        setIsPlayingOfferAudio(false);
+        setActiveOfferLang(null);
+        setDisplayedOfferPhonetic(null);
+      };
+      utterance.onerror = () => {
+        setIsPlayingOfferAudio(false);
+        setActiveOfferLang(null);
+        setDisplayedOfferPhonetic(null);
+      };
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    let phoneticText = "";
+    let label = "";
+
+    if (lang === 'wo') {
+      label = "Traduction en Wolof 🇸🇳";
+      phoneticText = `Solution ${offre.categorie} : facké "${offre.titre}" ci dadi Kaw-lack ak Fatick. Bi-né, dadi nay bakh ci yone, prix bi mo-gui doon ${offre.prixText}. Sou-kré-bel direct ci sa téléphone bi bo déffé, code bi dadi nay dakh.`;
+    } else if (lang === 'sr') {
+      label = "Traduction en Sereer 🇸🇳";
+      phoneticText = `Mboléne "${offre.titre}" co ko-par we, mbaris o yor ci mboléne faté-diougor o lorr co assurance. Prix o yor co ${offre.prixText}.`;
+    } else if (lang === 'pu') {
+      label = "Traduction en Pulaar 🇸🇳";
+      phoneticText = `Gollé ma faye ou-juneré, kisal tontine e jam! "${offre.titre}" iné woodi kisal handé e mbuudu ${offre.prixText}.`;
+    }
+
+    setDisplayedOfferPhonetic(`${label} : "${phoneticText}"`);
+
+    const utterance = new SpeechSynthesisUtterance(phoneticText);
+    utterance.lang = 'fr-FR';
+    utterance.rate = 0.78;
+    utterance.pitch = 1.05;
+
+    utterance.onend = () => {
+      setIsPlayingOfferAudio(false);
+      setActiveOfferLang(null);
+      setDisplayedOfferPhonetic(null);
+    };
+    utterance.onerror = () => {
+      setIsPlayingOfferAudio(false);
+      setActiveOfferLang(null);
+      setDisplayedOfferPhonetic(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stopOfferAudioSpeech = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlayingOfferAudio(false);
+    setActiveOfferLang(null);
+    setDisplayedOfferPhonetic(null);
+  };
 
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,6 +293,74 @@ export default function OffersPage() {
     setSelectedOffre(null);
     setSubscriptionPhone('');
     setSubscriptionSuccess(false);
+    setDirectSubSuccess(false);
+    setDirectSubLoading(false);
+    setGuestName('');
+    setGuestPhone('');
+    setActiveSubTab('plateforme');
+    setPaymentMode('wave');
+    stopOfferAudioSpeech();
+  };
+
+  const handleDirectSubscriptionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOffre) return;
+
+    setDirectSubLoading(true);
+
+    setTimeout(() => {
+      let subNom = currentUser?.nom || guestName || 'Anonyme';
+      let subPhone = currentUser?.telephone || guestPhone || 'Inconnu';
+      
+      // If paying by balance, perform check & deduct if user is logged in
+      if (paymentMode === 'solde' && currentUser) {
+        const cost = selectedOffre.prixNombre || 0;
+        const currentSolde = currentUser.soldeEpargne || 0;
+        if (currentSolde < cost) {
+          alert(`Votre solde d'épargne (${currentSolde.toLocaleString()} FCFA) est insuffisant pour payer cette offre (${cost.toLocaleString()} FCFA). Veuillez cotiser davantage ou choisir un autre moyen de paiement.`);
+          setDirectSubLoading(false);
+          return;
+        }
+        
+        if (onUpdateUser) {
+          onUpdateUser({
+            ...currentUser,
+            soldeEpargne: currentSolde - cost
+          });
+        }
+      }
+
+      // Add to microfin_platform_subscriptions in localStorage
+      const activeSubs = JSON.parse(localStorage.getItem('microfin_platform_subscriptions') || '[]');
+      const newSub = {
+        id: 'SUB_' + Math.floor(Math.random() * 1000000),
+        userId: currentUser?.id || 'GUEST',
+        userNom: subNom,
+        userPhone: subPhone,
+        offreId: selectedOffre.id,
+        offreTitre: selectedOffre.titre,
+        offreCategorie: selectedOffre.categorie,
+        offrePrix: selectedOffre.prixNombre || 0,
+        dateSouscription: new Date().toLocaleDateString('fr-FR'),
+        statut: 'Actif',
+        modePaiement: paymentMode === 'solde' ? 'Épargne' : paymentMode === 'wave' ? 'Wave' : 'Orange Money'
+      };
+      
+      activeSubs.unshift(newSub);
+      localStorage.setItem('microfin_platform_subscriptions', JSON.stringify(activeSubs));
+
+      // Log in microfin_activity_logs
+      const logList = JSON.parse(localStorage.getItem('microfin_activity_logs') || '[]');
+      logList.unshift({
+        id: 'LOG_' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date().toLocaleTimeString('fr-FR'),
+        text: `Souscription DIRECTE PLATEFORME de l'offre [${selectedOffre.titre}] par ${subNom}`
+      });
+      localStorage.setItem('microfin_activity_logs', JSON.stringify(logList));
+
+      setDirectSubLoading(false);
+      setDirectSubSuccess(true);
+    }, 1200);
   };
 
   const mockQuickSubscription = (offre: Offre) => {
@@ -281,15 +543,71 @@ export default function OffersPage() {
           </span>
         </div>
 
-        {/* Form to ask */}
+        {/* Form to ask with Voice Dictation Option */}
         <form onSubmit={handleAiSubmit} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label htmlFor="aiQueryInput" className="text-xs font-extrabold text-slate-800 uppercase tracking-widest block font-sans">
+              Votre message à l'Agent IA
+            </label>
+
+            {/* Voice Dictation Button for Agent */}
+            <button
+              type="button"
+              onClick={startAgentVoiceDictation}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                isRecordingAgent
+                  ? 'bg-red-500 border-red-250 text-white animate-pulse'
+                  : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-150 text-[#1A7A3E]'
+              }`}
+              title="Formuler ma question de vive voix"
+            >
+              {isRecordingAgent ? (
+                <>
+                  <MicOff className="w-3.5 h-3.5 text-white" />
+                  <span>{isSimulatingAgent ? `Écoute (${simulationCountdownAgent}s)` : 'Enregistrement...'}</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-[#1A7A3E]" />
+                  <span>Poser ma question de vive voix 🎙️</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Recording / Simulating Indicator Panel */}
+          {isRecordingAgent && (
+            <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-100 flex items-center justify-between gap-3 animate-fadeIn">
+              <div className="flex gap-2.5 items-start">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping mt-1"></span>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold text-[#1A7A3E] uppercase tracking-wider block">
+                    Mode Dictée Microphone Actif
+                  </span>
+                  <p className="text-xs text-slate-600 font-medium font-sans">
+                    {isSimulatingAgent 
+                      ? `L'accès direct au micro est restreint par l'iFrame de prévisualisation sécurisée. Simulation active : entrée détectée d'ici ${simulationCountdownAgent}s.` 
+                      : "Microphone activé avec succès. Parlez maintenant pour dicter votre question."
+                    }
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-0.5 items-center shrink-0">
+                <span className="w-1 h-3 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                <span className="w-1 h-4.5 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                <span className="w-1 h-2 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+            <div className="relative flex-grow">
               <input
+                id="aiQueryInput"
                 type="text"
                 required
                 disabled={aiLoading}
-                placeholder="Posez votre question sur les prix et disponibilités..."
+                placeholder="Posez votre question sur les prix, garanties, conditions..."
                 value={aiQuery}
                 onChange={(e) => setAiQuery(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-primary disabled:opacity-65 rounded-xl py-3 px-4 pl-11 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/15 transition-all text-slate-800"
@@ -466,64 +784,313 @@ export default function OffersPage() {
                   </div>
                 </div>
 
-                {/* Subscribing / USSD simulation guide */}
-                <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Souscription rapide</span>
-                      <p className="text-xs text-slate-300">Code USSD direct à utiliser sur votre mobile :</p>
-                    </div>
-                    <code className="text-accent text-sm md:text-base font-extrabold bg-slate-950 px-3 py-1.5 rounded-lg tracking-wider border border-slate-800">
-                      {selectedOffre.codeUSSD}
-                    </code>
-                  </div>
-
-                  <hr className="border-slate-800" />
-
-                  {/* Simulated Subscription form inside Modal */}
-                  {!subscriptionSuccess ? (
-                    <form onSubmit={handleSubscribeSubmit} className="space-y-3">
-                      <label className="text-xs text-slate-300 font-medium block">
-                        Entrez votre numéro de téléphone (Wave ou Orange Money) :
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <input
-                            type="tel"
-                            placeholder="77 123 45 67"
-                            required
-                            pattern="^(77|78|76|75|70)[0-9]{7}$"
-                            value={subscriptionPhone}
-                            onChange={(e) => setSubscriptionPhone(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 pl-11 text-xs focus:outline-none focus:border-primary text-white"
-                          />
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">🇸🇳</span>
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={subscriptionLoading}
-                          className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          {subscriptionLoading ? 'Envoi...' : 'Souscrire'}
-                        </button>
+                {/* Multilingual Local Speech TTS Audio Deck inside Modal */}
+                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-150 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🎙️</span>
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] text-[#1A7A3E] font-extrabold uppercase tracking-widest block">Lecteur Vocal Traducteur</span>
+                        <p className="text-[11px] text-slate-600 font-medium">Écouter les détails en langue locale :</p>
                       </div>
-                      <span className="block text-[10px] text-slate-500 italic">
-                        Format : Sénégalais (ex : 771234567, 78..., 76...)
-                      </span>
-                    </form>
-                  ) : (
-                    <div className="bg-emerald-950/40 border border-emerald-900 rounded-xl p-4 text-center space-y-2">
-                      <p className="text-emerald-400 font-bold text-xs">⭐ SIMULATION COMPLÈTÉE ⭐</p>
-                      <p className="text-[11px] text-slate-300">
-                        Votre demande a été initiée. Allez à l'accueil pour tester le <strong>Simulateur USSD interactif</strong> et valider la transaction directement sur le panneau du téléphone !
-                      </p>
+                    </div>
+                    {isPlayingOfferAudio && (
                       <button
                         type="button"
-                        onClick={handleCloseModal}
-                        className="text-accent font-bold text-xs hover:underline mt-1"
+                        onClick={stopOfferAudioSpeech}
+                        className="bg-red-500/10 hover:bg-red-500/20 text-red-700 text-[10px] uppercase tracking-wider font-bold py-1 px-2.5 rounded-full border border-red-200 transition cursor-pointer"
                       >
-                        Fermer cet écran
+                        Arrêter
                       </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'fr', label: 'Français 🇫🇷' },
+                      { id: 'wo', label: 'Wolof 🇸🇳' },
+                      { id: 'sr', label: 'Sereer 🇸🇳' },
+                      { id: 'pu', label: 'Pulaar 🇸🇳' },
+                    ].map((btn) => (
+                      <button
+                        key={btn.id}
+                        type="button"
+                        onClick={() => translateAndPlayOfferSpeech(selectedOffre, btn.id as any)}
+                        className={`py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          activeOfferLang === btn.id
+                            ? 'bg-primary text-white shadow'
+                            : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-705'
+                        }`}
+                      >
+                        <Play className="w-2.5 h-2.5 shrink-0" />
+                        <span>{btn.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {isPlayingOfferAudio && (
+                    <div className="bg-white p-2.5 rounded-xl border border-emerald-100 flex items-center justify-between gap-2.5 animate-fadeIn">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Activity className="w-3.5 h-3.5 text-primary shrink-0 animate-pulse" />
+                        <span className="text-[10px] text-slate-500 font-medium italic truncate">
+                          {displayedOfferPhonetic}
+                        </span>
+                      </div>
+                      <div className="flex gap-0.5 items-end h-3 shrink-0">
+                        <span className="w-0.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                        <span className="w-0.5 h-2.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                        <span className="w-0.5 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dual Subscriptions Methods Box (Platform & USSD) */}
+                <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-4">
+                  
+                  {/* Tab Headers */}
+                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubTab('plateforme')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        activeSubTab === 'plateforme'
+                          ? 'bg-primary text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Plateforme Directe</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubTab('ussd')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        activeSubTab === 'ussd'
+                          ? 'bg-primary text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Smartphone className="w-3.5 h-3.5 text-accent" />
+                      <span>Code USSD (Manuel)</span>
+                    </button>
+                  </div>
+
+                  {activeSubTab === 'plateforme' ? (
+                    /* PLATFORM ACTIVE METHOD */
+                    !directSubSuccess ? (
+                      <form onSubmit={handleDirectSubscriptionSubmit} className="space-y-4 pt-1">
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                          Réglez votre pack de manière digitale et autonome directement sur la plateforme avec activation automatique :
+                        </p>
+
+                        {/* Customer Information Form */}
+                        {currentUser ? (
+                          <div className="bg-slate-950/45 p-3 rounded-xl border border-slate-800 text-[11px] space-y-1">
+                            <p className="text-slate-400 font-medium">✨ Client connecté identifié :</p>
+                            <p className="font-bold text-slate-200">
+                              {currentUser.nom} • {currentUser.telephone} ({currentUser.role})
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="p-3 bg-amber-500/10 border border-amber-900/30 rounded-xl">
+                              <p className="text-[10px] text-slate-300 leading-relaxed">
+                                <strong className="text-accent">💡 ASTUCE :</strong> Connectez-vous d'abord à votre espace membre pour accumuler vos bonus sur votre livret d'épargne agricole et accéder à d'autres outils !
+                              </p>
+                              <button
+                                type="button"
+                                onClick={onTriggerLogin}
+                                className="mt-1.5 text-[10px] text-accent font-bold hover:underline"
+                              >
+                                Se connecter / S'ouvrir un compte 🔑
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Votre Nom complet :</label>
+                                <input
+                                  type="text"
+                                  placeholder="Ex: Demba Coulibaly"
+                                  required
+                                  value={guestName}
+                                  onChange={(e) => setGuestName(e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-primary rounded-xl py-2 px-3 text-xs text-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Téléphone :</label>
+                                <input
+                                  type="tel"
+                                  placeholder="77 123 45 67"
+                                  required
+                                  pattern="^(77|78|76|75|70)[0-9]{7}$"
+                                  value={guestPhone}
+                                  onChange={(e) => setGuestPhone(e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-800 focus:border-primary rounded-xl py-2 px-3 text-xs text-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* payment method selection */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Moyen de paiement :</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMode('wave')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                                paymentMode === 'wave'
+                                  ? 'bg-blue-600/10 border-blue-500 text-blue-400 font-bold text-xs'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white text-xs font-medium'
+                              }`}
+                            >
+                              <span>🌊 Wave</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMode('orange_money')}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                                paymentMode === 'orange_money'
+                                  ? 'bg-orange-600/10 border-orange-500 text-orange-400 font-bold text-xs'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white text-xs font-medium'
+                              }`}
+                            >
+                              <span>🍊 Orange</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMode('solde')}
+                              disabled={!currentUser}
+                              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                                !currentUser ? 'opacity-35 cursor-not-allowed' : ''
+                              } ${
+                                paymentMode === 'solde'
+                                  ? 'bg-emerald-600/10 border-emerald-550 text-emerald-400 font-bold text-xs'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white text-xs font-medium'
+                              }`}
+                              title={!currentUser ? "Connectez-vous pour utiliser votre épargne" : `Votre Solde : ${currentUser.soldeEpargne || 0} FCFA`}
+                            >
+                              <span>🌾 Solde</span>
+                              <span className="text-[9px] scale-90 truncate leading-none">
+                                {currentUser ? `${(currentUser.soldeEpargne || 0).toLocaleString()} F` : 'Non-connecté'}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <div className="pt-2 flex justify-between items-center gap-4">
+                          <div className="text-left leading-normal">
+                            <span className="text-[10px] text-slate-400 block font-semibold">Montant à régler :</span>
+                            <span className="text-base font-black text-white font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                              {selectedOffre.prixNombre > 0 ? `${selectedOffre.prixNombre.toLocaleString()} FCFA` : 'Gratuit'}
+                            </span>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={directSubLoading}
+                            className="bg-primary hover:bg-[#1A7A3E] text-white text-xs font-bold px-6 py-3 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-primary/20"
+                          >
+                            {directSubLoading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Traitement...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard className="w-4 h-4 text-accent" />
+                                <span>Activer Souscription</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="bg-emerald-950/40 border border-emerald-900 rounded-xl p-5 text-center space-y-3 animate-fadeIn">
+                        <span className="text-2xl block">🎉</span>
+                        <p className="text-emerald-400 font-black text-xs uppercase tracking-wide">Souscription Directe Validée !</p>
+                        <p className="text-[11px] text-slate-300 leading-relaxed font-semibold">
+                          Félicitations, votre offre est désormais active sur votre profil ! Les privilèges et garanties correspondantes ont été activées avec succès.
+                        </p>
+                        {currentUser && (
+                          <p className="text-[10px] text-emerald-300 font-bold">
+                            Vous pouvez dès maintenant visualiser et gérer cette souscription directe dans votre <strong>Espace Membres</strong> !
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleCloseModal}
+                          className="px-6 py-2 bg-primary hover:bg-[#1A7A3E] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer mt-2"
+                        >
+                          Fermer cet écran
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    /* USSD HISTORICAL METHOD ACTIVE */
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Souscription rapide</span>
+                          <p className="text-xs text-slate-300 font-medium">Faites-la sur votre application à l'aide de ce code :</p>
+                        </div>
+                        <code className="text-accent text-sm md:text-base font-extrabold bg-slate-950 px-3 py-1.5 rounded-lg tracking-wider border border-slate-800">
+                          {selectedOffre.codeUSSD}
+                        </code>
+                      </div>
+
+                      <hr className="border-slate-800" />
+
+                      {/* Simulated Subscription form inside Modal */}
+                      {!subscriptionSuccess ? (
+                        <form onSubmit={handleSubscribeSubmit} className="space-y-3">
+                          <label className="text-xs text-slate-300 font-semibold block">
+                            Entrez votre numéro de téléphone (Wave ou Orange Money) pour simuler par USSD :
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="tel"
+                                placeholder="77 123 45 67"
+                                required
+                                pattern="^(77|78|76|75|70)[0-9]{7}$"
+                                value={subscriptionPhone}
+                                onChange={(e) => setSubscriptionPhone(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 pl-11 text-xs focus:outline-none focus:border-primary text-white"
+                              />
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">🇸🇳</span>
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={subscriptionLoading}
+                              className="bg-primary hover:bg-[#1A7A3E] text-white text-xs font-bold px-4 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              {subscriptionLoading ? 'Envoi...' : 'Souscrire'}
+                            </button>
+                          </div>
+                          <span className="block text-[10px] text-slate-500 italic">
+                            Format : Sénégalais (ex : 771234567, 78..., 76...)
+                          </span>
+                        </form>
+                      ) : (
+                        <div className="bg-emerald-950/40 border border-emerald-900 rounded-xl p-4 text-center space-y-2 animate-fadeIn">
+                          <p className="text-emerald-400 font-bold text-xs">⭐ SIMULATION COMPLÈTÉE ⭐</p>
+                          <p className="text-[11px] text-slate-300 leading-relaxed font-semibold">
+                            Votre demande a été initiée. Allez à l'accueil pour tester le <strong>Simulateur USSD interactif</strong> et valider la transaction directement sur le panneau du téléphone !
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleCloseModal}
+                            className="text-accent font-bold text-xs hover:underline mt-1 cursor-pointer"
+                          >
+                            Fermer cet écran
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -9,6 +9,12 @@
   --color-accent-hover: #d97706;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --animate-wave-bounce-slow: wave-bounce-anim 1.2s ease-in-out infinite;
+
+  @keyframes wave-bounce-anim {
+    0%, 100% { height: 8px; }
+    50% { height: 44px; }
+  }
 }
 
 body {
